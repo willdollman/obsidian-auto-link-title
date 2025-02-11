@@ -27,9 +27,13 @@ async function getGithubPRTitle(url: string): Promise<string> {
   try {
     // Use gh CLI to get the PR title.
     // The command below returns just the title using the --jq option.
+    const env = {
+      ...process.env,
+      PATH: process.env.PATH + ":/opt/homebrew/bin"
+    };
     const output = execSync(
-      `/opt/homebrew/bin/gh pr view ${prNumber} --repo ${owner}/${repo} --json title --jq .title`,
-      { encoding: "utf8" }
+      `gh pr view ${prNumber} --repo ${owner}/${repo} --json title --jq .title`,
+      { encoding: "utf8", env }
     );
     var prTitle = output.trim() + " #" + prNumber;
     return prTitle;
@@ -105,7 +109,60 @@ export default class AutoLinkTitle extends Plugin {
       ],
     });
 
+    this.addCommand({
+      id: "insert-github-recent-prs",
+      name: "Insert recent GitHub PRs",
+      editorCallback: (editor) => this.insertGithubRecentAuthoredPRs(editor),
+      hotkeys: [
+        {
+          modifiers: ["Mod", "Shift"],
+          key: "g",
+        },
+      ],
+    });
+
     this.addSettingTab(new AutoLinkTitleSettingTab(this.app, this));
+  }
+
+  insertGithubRecentAuthoredPRs(editor: Editor): void {
+    // Only attempt fetch if online
+    if (!navigator.onLine) {
+      new Notice("No internet connection. Cannot fetch GitHub PRs.");
+      return;
+    }
+    try {
+      // Execute gh CLI to search for recent PRs by me updated in the last ~18 hours.
+      const command = 'gh search prs --author=@me --updated ">=$(date -u -v-18H +%Y-%m-%dT%H:%M:%SZ)" --json number,title,updatedAt,url --limit 50';
+      const env = {
+        ...process.env,
+        PATH: process.env.PATH + ":/opt/homebrew/bin"
+      };
+      const output = execSync(command, { encoding: "utf8", env });
+      const prs = JSON.parse(output);
+      if (!Array.isArray(prs) || prs.length === 0) {
+        new Notice("No recent PRs found.");
+        return;
+      }
+      // Format each PR into a Markdown bullet list item.
+      const prList = prs.map((pr: any) => {
+        try {
+          const urlObj = new URL(pr.url);
+          // Expected pathname is in the form /owner/repo/pull/number.
+          const parts = urlObj.pathname.split("/");
+          const owner = parts[1] || "";
+          const repo = parts[2] || "";
+          return `- [${pr.title} · ${owner}/${repo}#${pr.number}](${pr.url})`;
+        } catch (error) {
+          // Fallback formatting if URL parsing fails.
+          return `- [${pr.title} #${pr.number}](${pr.url})`;
+        }
+      }).join("\n");
+      // Insert the markdown list at the current cursor position.
+      editor.replaceSelection(prList);
+    } catch (err) {
+      console.error("gh command failed:", err);
+      new Notice("Failed to fetch recent PRs.");
+    }
   }
 
   addTitleToLink(editor: Editor): void {
