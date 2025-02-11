@@ -35,7 +35,8 @@ async function getGithubPRTitle(url: string): Promise<string> {
       `gh pr view ${prNumber} --repo ${owner}/${repo} --json title --jq .title`,
       { encoding: "utf8", env }
     );
-    var prTitle = output.trim() + " #" + prNumber;
+    var prTitle = output.trim();
+    var prTitle = `${prTitle} · ${owner}/${repo}#${prNumber}`;
     return prTitle;
   } catch (err) {
     console.error("gh command failed:", err);
