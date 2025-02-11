@@ -186,7 +186,6 @@ export default class AutoLinkTitle extends Plugin {
       const markdown =
         `### PRs
 ${authoredList}
-
 ### Reviews
 ${reviewList}`;
 
