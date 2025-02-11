@@ -111,8 +111,8 @@ export default class AutoLinkTitle extends Plugin {
     });
 
     this.addCommand({
-      id: "insert-github-recent-prs",
-      name: "Insert recent GitHub PRs",
+      id: "insert-github-recent-authored-prs",
+      name: "Insert recently authored GitHub PRs",
       editorCallback: (editor) => this.insertGithubRecentAuthoredPRs(editor),
       hotkeys: [
         {
@@ -122,7 +122,79 @@ export default class AutoLinkTitle extends Plugin {
       ],
     });
 
+    this.addCommand({
+      id: "insert-github-recent-involved-prs",
+      name: "Insert recent GitHub PRs I was involved in",
+      editorCallback: (editor) => this.insertGithubRecentInvolvedPRs(editor),
+      hotkeys: [
+        {
+          modifiers: ["Mod", "Shift"],
+          key: "i",
+        },
+      ],
+    });
+
+
     this.addSettingTab(new AutoLinkTitleSettingTab(this.app, this));
+  }
+
+  insertGithubRecentInvolvedPRs(editor: Editor): void {
+    // Only attempt fetch if online
+    if (!navigator.onLine) {
+      new Notice("No internet connection. Cannot fetch GitHub PRs.");
+      return;
+    }
+    try {
+      // Add common directories to PATH so that gh is found.
+      const env = {
+        ...process.env,
+        PATH: process.env.PATH + ":/opt/homebrew/bin"
+      };
+      // Query for PRs authored by me
+      const authoredCommand = 'gh search prs --author=@me --updated ">=$(date -u -v-18H +%Y-%m-%dT%H:%M:%SZ)" --json number,title,updatedAt,url --limit 50';
+      const authoredOutput = execSync(authoredCommand, { encoding: "utf8", env });
+      const authoredPRs: any[] = JSON.parse(authoredOutput);
+
+      // Query for PRs I'm involved in (as reviewer or otherwise)
+      const involvedCommand = 'gh search prs --involves @me --updated ">=$(date -u -v-18H +%Y-%m-%dT%H:%M:%SZ)" --json number,title,updatedAt,url --limit 50';
+      const involvedOutput = execSync(involvedCommand, { encoding: "utf8", env });
+      const involvedPRs: any[] = JSON.parse(involvedOutput);
+
+      // Use a set to filter out any PRs from involvedPRs that are already in authoredPRs.
+      const authoredUrls = new Set(authoredPRs.map(pr => pr.url));
+      const reviewPRs = involvedPRs.filter(pr => !authoredUrls.has(pr.url));
+
+      // Helper function to format a list of PRs into Markdown.
+      const formatPRs = (prs: any[]): string => {
+        return prs.map(pr => {
+          try {
+            const urlObj = new URL(pr.url);
+            const parts = urlObj.pathname.split("/");
+            const owner = parts[1] || "";
+            const repo = parts[2] || "";
+            return `- [${pr.title} · ${owner}/${repo}#${pr.number}](${pr.url})`;
+          } catch (error) {
+            return `- [${pr.title} #${pr.number}](${pr.url})`;
+          }
+        }).join("\n");
+      };
+
+      const authoredList = formatPRs(authoredPRs);
+      const reviewList = formatPRs(reviewPRs);
+
+      // Combine into two sections with headers.
+      const markdown =
+        `### PRs
+${authoredList}
+
+### Reviews
+${reviewList}`;
+
+      editor.replaceSelection(markdown);
+    } catch (err) {
+      console.error("gh command failed:", err);
+      new Notice("Failed to fetch GitHub PRs.");
+    }
   }
 
   insertGithubRecentAuthoredPRs(editor: Editor): void {
