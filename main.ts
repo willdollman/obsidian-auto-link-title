@@ -9,6 +9,36 @@ import {
   DEFAULT_SETTINGS,
 } from "./settings";
 
+// Import Node's child_process (only available in the Desktop/Electron environment)
+import { execSync } from "child_process";
+
+// Helper to check and run the gh CLI for GitHub pull requests.
+// Given a URL like "https://github.com/owner/repo/pull/123",
+// it extracts the owner, repo, and PR number, then executes a gh command
+// to fetch the PR title in JSON format.
+async function getGithubPRTitle(url: string): Promise<string> {
+  const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+  if (!match) return url;
+
+  const owner = match[1];
+  const repo = match[2];
+  const prNumber = match[3];
+
+  try {
+    // Use gh CLI to get the PR title.
+    // The command below returns just the title using the --jq option.
+    const output = execSync(
+      `/opt/homebrew/bin/gh pr view ${prNumber} --repo ${owner}/${repo} --json title --jq .title`,
+      { encoding: "utf8" }
+    );
+    var prTitle = output.trim() + " #" + prNumber;
+    return prTitle;
+  } catch (err) {
+    console.error("gh command failed:", err);
+    return url;
+  }
+}
+
 interface PasteFunction {
   (this: HTMLElement, ev: ClipboardEvent): void;
 }
@@ -338,6 +368,13 @@ export default class AutoLinkTitle extends Plugin {
 
   async fetchUrlTitle(url: string): Promise<string> {
     try {
+      // New: Use gh CLI for GitHub pull request URLs.
+      if (url.includes("github.com") && /\/pull\/\d+/.test(url)) {
+        console.log("Fetching GitHub PR title via gh CLI");
+        const prTitle = await getGithubPRTitle(url);
+        if (prTitle) return prTitle;
+      }
+
       let title = "";
       title = await this.fetchUrlTitleViaLinkPreview(url);
       console.log(`Title via Link Preview: ${title}`);
