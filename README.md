@@ -1,3 +1,12 @@
+## Development
+
+- https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin
+
+- Run `npm install` to install dependencies.
+- Run `npm run dev` to auto-build the plugin on save.
+- Use Hot Reload to auto-reload in a dev vault
+- To export to your main vault, copy `main.js` to your vault's `.obsidian/plugins/obsidian-auto-link-title/` folder to pull in updates.
+
 ## Obsidian Auto Link Title
 ![Auto linking example](auto-link-title.gif)
 
@@ -24,3 +33,4 @@ In order to paste the URL ensure you perform the `Tap and Hold -> Paste` action 
 #### Gboard
 Google's [Gboard](https://play.google.com/store/apps/details?id=com.google.android.inputmethod.latin&hl=en_US&gl=US) keyboard has a Clipboard helper shortcut above the keyboard to quickly paste.
 Due to the implementation of that feature, it does not trigger the `paste` event, preventing this plugin from interacting with the text.
+
